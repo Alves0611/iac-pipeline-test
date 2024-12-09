@@ -1,0 +1,281 @@
+name: Terraform - Multiple AWS Accounts
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform (apply or destroy)'
+        required: true
+        default: 'apply'
+      aws_account:
+        description: 'AWS Account to deploy to (CoAktion, droz-bot, droz-base-cluster-0000, etc.)'
+        required: true
+      aws_region:
+        description: 'AWS Region to deploy to'
+        required: true
+        default: 'us-east-1'
+      terraform_version:
+        description: 'Version of Terraform to use'
+        required: true
+        default: '1.8.0'
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      issues: write
+      id-token: write
+      contents: write  
+    timeout-minutes: 5
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        if: ${{ github.event.inputs.aws_account == 'CoAktion' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_COAKTION }}
+          aws-region: ${{ github.event.inputs.aws_region }}
+
+      - name: Configure AWS Credentials
+        if: ${{ github.event.inputs.aws_account == 'droz-base-cluster-0000' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DROZ_BASE_CLUSTER_0000 }}
+          aws-region: ${{ github.event.inputs.aws_region }}
+
+      - name: Configure AWS Credentials
+        if: ${{ github.event.inputs.aws_account == 'droz-bot' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DROZ_BOT }}
+          aws-region: ${{ github.event.inputs.aws_region }}
+
+      - name: Configure AWS Credentials
+        if: ${{ github.event.inputs.aws_account == 'droz-bot-0000' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DROZ_BOT_0000 }}
+          aws-region: ${{ github.event.inputs.aws_region }}
+
+      - name: Configure AWS Credentials
+        if: ${{ github.event.inputs.aws_account == 'droz-cluster-0000' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DROZ_CLUSTER_0000 }}
+          aws-region: ${{ github.event.inputs.aws_region }}
+
+      - name: Configure AWS Credentials
+        if: ${{ github.event.inputs.aws_account == 'droz-cluster-0001' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DROZ_CLUSTER_0001 }}
+          aws-region: ${{ github.event.inputs.aws_region }}
+
+      - name: Configure AWS Credentials
+        if: ${{ github.event.inputs.aws_account == 'droz-cluster-0002' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DROZ_CLUSTER_0002 }}
+          aws-region: ${{ github.event.inputs.aws_region }}
+
+      - name: Configure AWS Credentials
+        if: ${{ github.event.inputs.aws_account == 'droz-cluster-0003' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DROZ_CLUSTER_0003 }}
+          aws-region: ${{ github.event.inputs.aws_region }}
+
+      - name: Configure AWS Credentials
+        if: ${{ github.event.inputs.aws_account == 'droz-cluster-0004' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DROZ_CLUSTER_0004 }}
+          aws-region: ${{ github.event.inputs.aws_region }}
+
+      - name: Configure AWS Credentials
+        if: ${{ github.event.inputs.aws_account == 'droz-cluster-0005' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DROZ_CLUSTER_0005 }}
+          aws-region: ${{ github.event.inputs.aws_region }}
+
+      - name: Configure AWS Credentials
+        if: ${{ github.event.inputs.aws_account == 'droz-commons' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DROZ_COMMONS }}
+          aws-region: ${{ github.event.inputs.aws_region }}
+
+      - name: Configure AWS Credentials
+        if: ${{ github.event.inputs.aws_account == 'droz-commons-bi' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DROZ_COMMONS_BI }}
+          aws-region: ${{ github.event.inputs.aws_region }}
+
+      - name: Install TFLint
+        run: |
+          curl -L https://github.com/terraform-linters/tflint/releases/latest/download/tflint_linux_amd64.zip -o tflint.zip
+          unzip tflint.zip
+          sudo mv tflint /usr/local/bin/
+          rm tflint.zip
+
+      - name: Lint Terraform files
+        run: tflint
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ github.event.inputs.terraform_version }}
+        env:
+          AWS_DEFAULT_REGION: ${{ github.event.inputs.aws_region }}
+
+      - name: Initialize Terraform
+        run: terraform init -reconfigure
+
+      - name: Plan Terraform changes
+        run: terraform plan -out=tfplan
+
+      - name: Cache Terraform files
+        uses: actions/cache@v4
+        with:
+          path: |
+            .terraform
+            .terraform.lock.hcl
+          key: ${{ runner.os }}-terraform-${{ hashFiles('**/*.tf') }}
+      
+      - name: Upload Terraform plan
+        uses: actions/upload-artifact@v4
+        with:
+            name: tfplan
+            path: tfplan
+
+
+  deploy:
+    needs: plan
+    runs-on: ubuntu-latest
+    environment: manual-approval
+    permissions:
+      id-token: write
+      contents: write
+    timeout-minutes: 20
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        if: ${{ github.event.inputs.aws_account == 'CoAktion' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_COAKTION }}
+          aws-region: ${{ github.event.inputs.aws_region }}
+
+      - name: Configure AWS Credentials
+        if: ${{ github.event.inputs.aws_account == 'droz-base-cluster-0000' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DROZ_BASE_CLUSTER_0000 }}
+          aws-region: ${{ github.event.inputs.aws_region }}
+
+      - name: Configure AWS Credentials
+        if: ${{ github.event.inputs.aws_account == 'droz-bot' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DROZ_BOT }}
+          aws-region: ${{ github.event.inputs.aws_region }}
+
+      - name: Configure AWS Credentials
+        if: ${{ github.event.inputs.aws_account == 'droz-bot-0000' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DROZ_BOT_0000 }}
+          aws-region: ${{ github.event.inputs.aws_region }}
+
+      - name: Configure AWS Credentials
+        if: ${{ github.event.inputs.aws_account == 'droz-cluster-0000' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DROZ_CLUSTER_0000 }}
+          aws-region: ${{ github.event.inputs.aws_region }}
+
+      - name: Configure AWS Credentials
+        if: ${{ github.event.inputs.aws_account == 'droz-cluster-0001' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DROZ_CLUSTER_0001 }}
+          aws-region: ${{ github.event.inputs.aws_region }}
+
+      - name: Configure AWS Credentials
+        if: ${{ github.event.inputs.aws_account == 'droz-cluster-0002' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DROZ_CLUSTER_0002 }}
+          aws-region: ${{ github.event.inputs.aws_region }}
+
+      - name: Configure AWS Credentials
+        if: ${{ github.event.inputs.aws_account == 'droz-cluster-0003' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DROZ_CLUSTER_0003 }}
+          aws-region: ${{ github.event.inputs.aws_region }}
+
+      - name: Configure AWS Credentials
+        if: ${{ github.event.inputs.aws_account == 'droz-cluster-0004' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DROZ_CLUSTER_0004 }}
+          aws-region: ${{ github.event.inputs.aws_region }}
+
+      - name: Configure AWS Credentials
+        if: ${{ github.event.inputs.aws_account == 'droz-cluster-0005' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DROZ_CLUSTER_0005 }}
+          aws-region: ${{ github.event.inputs.aws_region }}
+
+      - name: Configure AWS Credentials
+        if: ${{ github.event.inputs.aws_account == 'droz-commons' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DROZ_COMMONS }}
+          aws-region: ${{ github.event.inputs.aws_region }}
+
+      - name: Configure AWS Credentials
+        if: ${{ github.event.inputs.aws_account == 'droz-commons-bi' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DROZ_COMMONS_BI }}
+          aws-region: ${{ github.event.inputs.aws_region }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ github.event.inputs.terraform_version }}
+        
+      - name: Download repository artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan
+          path: ./tfplan
+      
+      - name: Move Terraform plan
+        run: mv ./tfplan/tfplan ./tfplan.tfplan
+      
+      - name: Initialize Terraform
+        run: terraform init -reconfigure
+
+      - name: Apply or Destroy Terraform
+        run: |
+          if [ "${{ github.event.inputs.action }}" == "apply" ]; then
+            terraform apply -auto-approve ./tfplan.tfplan
+          elif [ "${{ github.event.inputs.action }}" == "destroy" ]; then
+            terraform destroy -auto-approve
+          else
+            echo "Invalid action specified: ${{ github.event.inputs.action }}"
+            exit 1
+          fi
+      
+      
